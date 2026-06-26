@@ -1,0 +1,6 @@
+{
+  "name": "SWEN TECH Lead Hunter",
+  "description": "An AI-powered Google Maps lead generation and sales pipeline tool that scores prospects, extracts contact info, and draft personalized outreach.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
