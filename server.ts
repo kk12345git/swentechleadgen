@@ -58,39 +58,61 @@ For each business, analyze their digital footprint to calculate a lead score (0 
 
 Generate a valid JSON array of objects. Do NOT use markdown. Follow the schema strictly.`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: `Find 8 real businesses for: "${searchQuery}". Score them and output details in structured JSON.`,
-      config: {
-        systemInstruction,
-        tools: [{ googleSearch: {} }],
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              name: { type: Type.STRING, description: "Official business name" },
-              website: { type: Type.STRING, description: "Official website URL, or empty string if none exists" },
-              address: { type: Type.STRING, description: "Full street address" },
-              phone: { type: Type.STRING, description: "Contact phone number, or empty string" },
-              category: { type: Type.STRING, description: "Primary category/industry" },
-              rating: { type: Type.NUMBER, description: "Google rating out of 5, or null if none" },
-              reviewsCount: { type: Type.INTEGER, description: "Number of reviews, or 0" },
-              email: { type: Type.STRING, description: "Discovered email address, or empty string" },
-              socials: { type: Type.STRING, description: "Comma-separated social links if found, or empty string" },
-              score: { type: Type.INTEGER, description: "Lead score from 10 to 100 based on fit" },
-              scoreExplanation: { type: Type.STRING, description: "2-3 sentences explaining why they got this score and what specific service of ours to pitch." }
-            },
-            required: ["name", "website", "address", "phone", "category", "rating", "reviewsCount", "email", "socials", "score", "scoreExplanation"]
-          }
-        }
+    const leadSchema = {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          name: { type: Type.STRING, description: "Official business name" },
+          website: { type: Type.STRING, description: "Official website URL, or empty string if none exists" },
+          address: { type: Type.STRING, description: "Full street address" },
+          phone: { type: Type.STRING, description: "Contact phone number, or empty string" },
+          category: { type: Type.STRING, description: "Primary category/industry" },
+          rating: { type: Type.NUMBER, description: "Google rating out of 5, or null if none" },
+          reviewsCount: { type: Type.INTEGER, description: "Number of reviews, or 0" },
+          email: { type: Type.STRING, description: "Discovered email address, or empty string" },
+          socials: { type: Type.STRING, description: "Comma-separated social links if found, or empty string" },
+          score: { type: Type.INTEGER, description: "Lead score from 10 to 100 based on fit" },
+          scoreExplanation: { type: Type.STRING, description: "2-3 sentences explaining why they got this score and what specific service of ours to pitch." }
+        },
+        required: ["name", "website", "address", "phone", "category", "rating", "reviewsCount", "email", "socials", "score", "scoreExplanation"]
       }
-    });
+    };
 
-    const text = response.text || "[]";
-    const leads = JSON.parse(text);
-    res.json({ leads });
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: `Find 8 real businesses for: "${searchQuery}". Score them and output details in structured JSON.`,
+        config: {
+          systemInstruction,
+          tools: [{ googleSearch: {} }],
+          responseMimeType: "application/json",
+          responseSchema: leadSchema
+        }
+      });
+
+      const text = response.text || "[]";
+      const leads = JSON.parse(text);
+      res.json({ leads });
+    } catch (groundingError: any) {
+      console.warn("Google Search Grounding failed (likely due to free tier API quota). Falling back to standard generative model.", groundingError);
+      
+      const fallbackInstruction = `${systemInstruction}\n\nNote: The live Google Search grounding tool is unavailable. Please generate realistic, representative local business prospects based on your knowledge base matching the user query and location. Include complete, detailed profiles.`;
+      
+      const response = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: `Generate 8 realistic local business prospects for: "${searchQuery}". Output details in structured JSON.`,
+        config: {
+          systemInstruction: fallbackInstruction,
+          responseMimeType: "application/json",
+          responseSchema: leadSchema
+        }
+      });
+
+      const text = response.text || "[]";
+      const leads = JSON.parse(text);
+      res.json({ leads, warning: "Using generative fallback leads. To fetch live Google Maps listings, upgrade your Google AI Studio project to the Paid Tier." });
+    }
   } catch (error: any) {
     console.error("Search leads error:", error);
     res.status(500).json({ error: error.message || "Failed to search leads using Gemini grounding." });
