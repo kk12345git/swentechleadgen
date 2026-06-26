@@ -483,6 +483,10 @@ async function setupFrontend() {
   });
 }
 
-setupFrontend().catch((err) => {
-  console.error("Failed to start server:", err);
-});
+if (!process.env.VERCEL) {
+  setupFrontend().catch((err) => {
+    console.error("Failed to start server:", err);
+  });
+}
+
+export default app;
